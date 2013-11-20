@@ -3861,17 +3861,27 @@ Customize variable `magit-diff-refine-hunk' to change the default mode."
 ;;; Log Washing
 ;;;; Log Washing Variables
 
+;; (defconst magit-log-oneline-re
+;;   (concat "^"
+;;           "\\(?4:\\(?:[-_/|\\*o.] ?\\)+ *\\)?"     ; graph
+;;           "\\(?:"
+;;           "\\(?1:[0-9a-fA-F]+\\) "                 ; sha1
+;;           "\\(?:\\(?3:([^()]+)\\) \\)?"            ; refs
+;;           "\\(?7:[BGUN]\\)?"                       ; gpg
+;;           "\\[\\(?5:[^]]*\\)\\]"                   ; author
+;;           "\\[\\(?6:[^]]*\\)\\]"                   ; date
+;;           "\\(?2:.+\\)"                            ; msg
+;;           "\\)?$"))
+
 (defconst magit-log-oneline-re
   (concat "^"
-          "\\(?4:\\(?:[-_/|\\*o.] ?\\)+ *\\)?"     ; graph
-          "\\(?:"
-          "\\(?1:[0-9a-fA-F]+\\) "                 ; sha1
-          "\\(?:\\(?3:([^()]+)\\) \\)?"            ; refs
-          "\\(?7:[BGUN]\\)?"                       ; gpg
-          "\\[\\(?5:[^]]*\\)\\]"                   ; author
-          "\\[\\(?6:[^]]*\\)\\]"                   ; date
-          "\\(?2:.+\\)"                            ; msg
-          "\\)?$"))
+          "\\(?4:[^ ]+\\) "           ; graph
+          "\\(?1:[^ ]+\\)? "          ; sha1
+          "\\(?5:[^ ]+\\)? "          ; author
+          "\\(?6:[^ ]+\\)? "          ; date
+          "\\(?2:[^ ]+\\)? "          ; msg
+          "\\(?3:[^ \n]+\\)?"          ; refs
+          "$"))
 
 (defconst magit-log-long-re
   (concat "^"
@@ -3922,12 +3932,15 @@ Customize variable `magit-diff-refine-hunk' to change the default mode."
 ;;;; Log Washing Functions
 
 (defun magit-wash-log (style &optional color)
-  (when color
-    (let ((ansi-color-apply-face-function
-           (lambda (beg end face)
-             (when face
-               (put-text-property beg end 'font-lock-face face)))))
-      (ansi-color-apply-on-region (point-min) (point-max))))
+  (when (eq style 'oneline)
+    (magit-pg-2 (current-buffer))
+    (goto-char (point-min)))
+  ;; (when color
+  ;;   (let ((ansi-color-apply-face-function
+  ;;          (lambda (beg end face)
+  ;;            (when face
+  ;;              (put-text-property beg end 'font-lock-face face)))))
+  ;;     (ansi-color-apply-on-region (point-min) (point-max))))
   (when (eq style 'cherry)
     (reverse-region (point-min) (point-max)))
   (let ((magit-old-top-section nil))
@@ -6129,20 +6142,26 @@ Other key binding:
                    (and range (concat " in " range)))
            (apply-partially 'magit-wash-log style 'color)
            "log"
-           (format "--max-count=%d" magit-log-cutoff-length)
-           "--decorate=full" "--abbrev-commit" "--color"
-           (magit-diff-abbrev-arg)
-           `(,@(cl-case style
-                 (long
-                  (if magit-log-show-gpg-status
-                      (list "--stat" "--show-signature")
-                    (list "--stat")))
-                 (oneline
-                  (list (concat "--pretty=format:%h%d "
-                                (and magit-log-show-gpg-status "%G?")
-                                "[%an][%ar]%s"))))
-             ,@args ,range "--"
-             ,@(and file (list file))))))
+
+           (list "--date-order" "--decorate=full"
+                 "--pretty=format:%H%x00%P%x00%h%x00%an%x00%ar%x00%s%x00%d"
+                 "--all" "--max-count=100")
+           ;; (format "--max-count=%d" magit-log-cutoff-length)
+           ;; "--decorate=full" "--abbrev-commit" "--color"
+           ;; (magit-diff-abbrev-arg)
+           ;; `(,@(cl-case style
+           ;;       (long
+           ;;        (if magit-log-show-gpg-status
+           ;;            (list "--stat" "--show-signature")
+           ;;          (list "--stat")))
+           ;;       (oneline
+           ;;        (list (concat "--pretty=format:%h%d "
+           ;;                      (and magit-log-show-gpg-status "%G?")
+           ;;                      "[%an][%ar]%s"))))
+           ;;   ,@args ,range "--"
+           ;;   ,@(and file (list file)))
+           
+           )))
 
 (defun magit-log-show-more-entries (&optional arg)
   "Grow the number of log entries shown.
